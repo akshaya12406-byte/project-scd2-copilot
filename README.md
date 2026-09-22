@@ -21,7 +21,7 @@ In enterprise data warehouses, tracking historical changes to dimensional data (
 SCD2 Copilot provides a **guaranteed deterministic core data engine** combined with an **AI explanation and audit layer**:
 1. **100% Deterministic Engine**: Built on **Polars** to perform change detection, SCD2 transformations, and 5-point data integrity validation without any LLM intervention.
 2. **AI Explanation Layer**: Translates detected field-level modifications into clear business English using Google Gemini, Groq, or offline deterministic templates.
-3. **Resilient Multi-Tier Fallback**: Automatically degrades across a 5-model Gemini chain, then to Groq LLaMA 3.3, and finally to local templates so the pipeline never halts.
+3. **Resilient Multi-Tier Fallback**: Automatically degrades across a 5-model Gemini chain, then to Groq (GPT-OSS 20B/120B), and finally to local templates so the pipeline never halts.
 4. **Interactive Dashboard**: A responsive Streamlit enterprise workspace with 1-click built-in demo datasets, schema overrides, interactive diff explorers, and audit downloads.
 
 ---
@@ -53,7 +53,7 @@ SCD2 Copilot provides a **guaranteed deterministic core data engine** combined w
 │       SCD2 Table Transformer         │          │     AI Explanation Orchestrator      │
 │        (transform_scd2.py)           │          │             (explain.py)             │
 │  - Closes outdated records           │          │  - Gemini 5-model fallback chain     │
-│  - Inserts active versions           │          │  - Groq LLaMA 3.3 fallback           │
+│  - Inserts active versions           │          │  - Groq GPT-OSS fallback chain       │
 │  - Preserves closed history          │          │  - Offline template fallback         │
 └──────────────────┬───────────────────┘          └──────────────────┬───────────────────┘
                    │                                                 │
@@ -104,8 +104,8 @@ SCD2 Copilot provides a **guaranteed deterministic core data engine** combined w
 * **Web Framework**: [Streamlit](https://streamlit.io/)
 * **Orchestration**: [Prefect 3](https://www.prefect.io/)
 * **AI Providers**:
-  * [Google GenAI SDK](https://github.com/googleapis/python-genai) (`gemini-3.1-flash-lite`, `gemini-3-flash`, `gemini-2.5-flash-lite`, `gemini-2.5-flash`)
-  * [Groq SDK](https://github.com/groq/groq-python) (`llama-3.3-70b-versatile`)
+  * [Google GenAI SDK](https://github.com/googleapis/python-genai) (`gemini-3.5-flash-lite`, `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3.5-flash`)
+  * [Groq SDK](https://github.com/groq/groq-python) (`openai/gpt-oss-20b`, `openai/gpt-oss-120b`)
   * Deterministic Template Engine (local offline fallback)
 * **Configuration**: `pydantic`, `pydantic-settings`
 * **Testing**: `pytest`, property-based testing, saturation benchmarks

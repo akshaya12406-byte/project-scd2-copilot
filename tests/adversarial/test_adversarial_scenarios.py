@@ -340,8 +340,10 @@ def test_api_failure_simulation(mock_genai_client):
     mock_instance.models.generate_content.side_effect = Exception("ResourceExhausted: 429 quota limit")
     
     settings = Settings(
+        _env_file=None,
         gemini_api_key="mock_key",
-        llm_provider=LLMProvider.GEMINI
+        groq_api_key="",
+        llm_provider=LLMProvider.GEMINI,
     )
     
     # We expect explain_changes to intercept exception and fallback toTemplateProvider

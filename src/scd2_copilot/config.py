@@ -21,6 +21,21 @@ class LLMProvider(str, Enum):
     TEMPLATE = "template"
 
 
+# ── Active LLM Model Chains (Centralized) ───────────────
+GEMINI_MODEL_CHAIN: list[str] = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+]
+
+GROQ_MODEL_CHAIN: list[str] = [
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+]
+
+
 class Settings(BaseSettings):
     """Application-wide settings loaded from .env / environment."""
 

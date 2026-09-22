@@ -15,25 +15,18 @@ from typing import Any
 from google import genai
 from pydantic import BaseModel, Field
 
+from ..config import GEMINI_MODEL_CHAIN
 from ..models import ChangeRecord, ChangeType, Explanation, LLMMetrics
 from .base import LLMProvider
 from .template import TemplateProvider
 
 logger = logging.getLogger(__name__)
 
-# Model fallback chain: try each in order until one works.
-# Each model has a separate daily free-tier quota, so if one is
-# exhausted we can try the next.
-MODEL_CHAIN = [
-    "gemini-3.1-flash-lite",
-    "gemini-3-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-3.5-flash",
-]
+# Model fallback chain: centralized active Gemini models
+MODEL_CHAIN = GEMINI_MODEL_CHAIN
 
 MAX_RETRIES_PER_MODEL = 2
-RETRY_BASE_DELAY = 3  # seconds
+RETRY_BASE_DELAY = 1  # seconds for fast failover
 
 
 class ExplanationItem(BaseModel):
@@ -58,7 +51,7 @@ class GeminiProvider(LLMProvider):
 
     def explain_change(self, record: ChangeRecord) -> Explanation:
         prompt = _build_prompt(record)
-        text, model_used = self._call_with_fallback(prompt)
+        text, model_used = self._call_with_fallback(prompt, config={"max_output_tokens": 300})
 
         return Explanation(
             business_key_values=record.business_key_values,
@@ -78,6 +71,7 @@ class GeminiProvider(LLMProvider):
         config = {
             "response_mime_type": "application/json",
             "response_schema": list[ExplanationItem],
+            "max_output_tokens": 2000,
         }
 
         try:
@@ -145,6 +139,8 @@ class GeminiProvider(LLMProvider):
                     # Extract text or parsed schema depending on configuration
                     if config and "response_schema" in config:
                         result = response.parsed
+                        if result is None:
+                            raise ValueError(f"Model {model} returned empty or unparsed structured output")
                     else:
                         result = response.text.strip() if response.text else ""
 
@@ -181,37 +177,22 @@ class GeminiProvider(LLMProvider):
 
                 except Exception as e:
                     last_error = e
-                    err_str = str(e)
+                    err_str = str(e).lower()
 
-                    if "429" in err_str and "PerDay" in err_str:
-                        # Daily quota exhausted — no point retrying this model
-                        logger.info(
-                            "Model %s daily quota exhausted, trying next model.",
-                            model,
-                        )
-                        break  # move to next model
-
-                    if "404" in err_str:
-                        # Model not found — skip entirely
-                        logger.info("Model %s not found, trying next.", model)
+                    # Immediate fallback (no retry) for quota exhaustion, 404, invalid model
+                    if any(q in err_str for q in ("perday", "quota", "resource_exhausted", "404", "not found", "invalid model", "unsupported", "parse")):
+                        logger.info("Model %s unavailable or quota exhausted (%s). Trying next model in chain.", model, e)
                         break
 
-                    if "429" in err_str:
-                        # Per-minute rate limit — retry with backoff
-                        delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
-                        logger.info(
-                            "Model %s rate-limited (attempt %d/%d), "
-                            "retrying in %ds...",
-                            model, attempt, MAX_RETRIES_PER_MODEL, delay,
-                        )
+                    # Retry at most once for transient rate limit or server error
+                    if attempt < MAX_RETRIES_PER_MODEL and any(t in err_str for t in ("429", "rate limit", "500", "502", "503", "504", "timeout", "connection")):
+                        delay = RETRY_BASE_DELAY
+                        logger.info("Model %s transient error (%s). Retrying in %ds...", model, e, delay)
                         time.sleep(delay)
                         continue
 
-                    # Unknown error — don't retry, try next model
-                    logger.warning(
-                        "Model %s failed with %s: %s",
-                        model, type(e).__name__, str(e)[:200],
-                    )
+                    # Otherwise, fail over to the next model immediately
+                    logger.warning("Model %s failed with %s: %s. Moving to next model.", model, type(e).__name__, str(e)[:200])
                     break
 
         # If cached model failed, try the full chain
